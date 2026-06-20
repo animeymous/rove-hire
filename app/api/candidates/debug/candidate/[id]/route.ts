@@ -1,12 +1,12 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import Candidate from '@/lib/models/Candidate';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 
 export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -14,11 +14,17 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const { id } = await params;
+
     await connectToDatabase();
-    const candidate = await Candidate.findById(params.id);
+    
+    const candidate = await Candidate.findById(id);
 
     if (!candidate) {
-      return NextResponse.json({ error: 'Candidate not found' }, { status: 404 });
+      return NextResponse.json(
+        { error: 'Candidate not found' },
+        { status: 404 }
+      );
     }
 
     return NextResponse.json({
@@ -26,9 +32,6 @@ export async function GET(
         id: candidate._id,
         name: candidate.name,
         email: candidate.email,
-        magicLinkToken: candidate.magicLinkToken,
-        magicLinkExpiresAt: candidate.magicLinkExpiresAt,
-        isMagicLinkUsed: candidate.isMagicLinkUsed,
         status: candidate.status,
       }
     }, { status: 200 });

@@ -2,27 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import Candidate from '@/lib/models/Candidate';
 
-// Using NextRequest to properly handle params
 export async function GET(
   request: NextRequest,
-  { params }: { params: { token: string } }
+  { params }: { params: Promise<{ token: string }> }
 ) {
   try {
-    // Get token from params
-    const token = params.token;
+    // 👈 AWAIT the params
+    const { token } = await params;
 
-    console.log('🔍 Verifying token from params:', token);
+    console.log('🔍 Verifying token:', token);
 
-    // Also try getting from URL as fallback
-    const url = new URL(request.url);
-    const pathParts = url.pathname.split('/');
-    const tokenFromUrl = pathParts[pathParts.length - 1];
-    console.log('🔍 Token from URL:', tokenFromUrl);
-
-    const finalToken = token || tokenFromUrl;
-
-    if (!finalToken) {
-      console.log('❌ No token provided');
+    if (!token) {
       return NextResponse.json(
         { error: 'Invalid link - no token provided' },
         { status: 400 }
@@ -34,7 +24,7 @@ export async function GET(
 
     // Find candidate with this token
     const candidate = await Candidate.findOne({
-      magicLinkToken: finalToken,
+      magicLinkToken: token,
     }).populate('jobId', 'title');
 
     console.log('📝 Found candidate:', candidate ? candidate.name : 'None');
