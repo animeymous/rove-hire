@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import Candidate from '@/lib/models/Candidate';
+import Job from '@/lib/models/Job'; // 👈 ADD THIS IMPORT
 import TimelineEvent from '@/lib/models/TimelineEvent';
 import OfferDocument from '@/lib/models/OfferDocument';
 import { getServerSession } from 'next-auth';
@@ -26,8 +27,10 @@ export async function GET(request: NextRequest) {
 
     await connectToDatabase();
 
+    // Now Job model is registered, so populate works
     const candidate = await Candidate.findById(id).populate('jobId', 'title');
     const timeline = await TimelineEvent.find({ candidateId: id }).sort({ createdAt: -1 });
+    const offerDoc = await OfferDocument.findOne({ candidateId: id });
 
     if (!candidate) {
       return NextResponse.json(
@@ -35,9 +38,6 @@ export async function GET(request: NextRequest) {
         { status: 404 }
       );
     }
-
-    // Get offer documents if they exist
-    const offerDoc = await OfferDocument.findOne({ candidateId: id });
 
     return NextResponse.json({
       candidate,
@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Error fetching candidate:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch candidate' },
+      { error: 'Failed to fetch candidate: ' + (error as Error).message },
       { status: 500 }
     );
   }
@@ -64,8 +64,6 @@ export async function PATCH(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const id = searchParams.get('id');
     const { status, reason } = await request.json();
-
-    console.log('📝 Updating candidate:', id, 'to status:', status);
 
     if (!id) {
       return NextResponse.json(
@@ -114,12 +112,10 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    // Update candidate status
     candidate.status = status;
     candidate.updatedAt = new Date();
     await candidate.save();
 
-    // Create timeline event
     let description = '';
     let eventType = '';
 

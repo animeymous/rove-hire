@@ -1,7 +1,5 @@
 import { NextResponse } from 'next/server';
-import { writeFile, mkdir } from 'fs/promises';
-import path from 'path';
-import { v4 as uuidv4 } from 'uuid';
+import { put } from '@vercel/blob';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 
@@ -23,8 +21,7 @@ export async function POST(request: Request) {
     }
 
     // Validate file type
-    const validTypes = ['application/pdf'];
-    if (!validTypes.includes(file.type)) {
+    if (file.type !== 'application/pdf') {
       return NextResponse.json(
         { error: 'Only PDF files are allowed' },
         { status: 400 }
@@ -39,27 +36,16 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create uploads directory if it doesn't exist
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'resumes');
-    await mkdir(uploadDir, { recursive: true });
-
-    // Generate unique filename
-    const fileExtension = path.extname(file.name);
-    const fileName = `${uuidv4()}${fileExtension}`;
-    const filePath = path.join(uploadDir, fileName);
-
-    // Save file
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    await writeFile(filePath, buffer);
-
-    // Return the file URL
-    const fileUrl = `/uploads/resumes/${fileName}`;
+    // Upload to Vercel Blob - works both locally and in production
+    const blob = await put(file.name, file, {
+      access: 'public',
+      token: process.env.BLOB_READ_WRITE_TOKEN,
+    });
 
     return NextResponse.json(
       { 
         message: 'File uploaded successfully',
-        fileUrl: fileUrl,
+        fileUrl: blob.url,
         fileName: file.name
       },
       { status: 200 }
@@ -67,7 +53,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Upload error:', error);
     return NextResponse.json(
-      { error: 'Failed to upload file' },
+      { error: 'Failed to upload file: ' + (error as Error).message },
       { status: 500 }
     );
   }

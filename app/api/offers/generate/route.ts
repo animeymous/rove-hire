@@ -5,8 +5,7 @@ import OfferDocument from '@/lib/models/OfferDocument';
 import TimelineEvent from '@/lib/models/TimelineEvent';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { writeFile, mkdir } from 'fs/promises';
-import path from 'path';
+import { put } from '@vercel/blob';
 import { v4 as uuidv4 } from 'uuid';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
@@ -59,10 +58,6 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create uploads directory if it doesn't exist
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'offers');
-    await mkdir(uploadDir, { recursive: true });
-
     const today = new Date();
     const startDateObj = new Date(startDate);
     const formattedDate = today.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
@@ -71,8 +66,8 @@ export async function POST(request: Request) {
 
     // Generate Offer Letter PDF
     const offerLetterDoc = await PDFDocument.create();
-    const offerPage = offerLetterDoc.addPage([612, 792]); // Letter size
-    const { width, height } = offerPage.getSize();
+    const offerPage = offerLetterDoc.addPage([612, 792]);
+    const { height } = offerPage.getSize();
     const font = await offerLetterDoc.embedFont(StandardFonts.Helvetica);
     const boldFont = await offerLetterDoc.embedFont(StandardFonts.HelveticaBold);
 
@@ -192,17 +187,20 @@ export async function POST(request: Request) {
       color: rgb(0.4, 0.4, 0.4),
     });
 
-    // Save Offer Letter
+    // Save Offer Letter to Vercel Blob - FIXED: Convert to Buffer
     const offerLetterBytes = await offerLetterDoc.save();
+    const offerLetterBuffer = Buffer.from(offerLetterBytes); // 👈 Convert Uint8Array to Buffer
     const offerLetterFileName = `offer_${uuidv4()}.pdf`;
-    const offerLetterPath = path.join(uploadDir, offerLetterFileName);
-    await writeFile(offerLetterPath, offerLetterBytes);
-    const offerLetterUrl = `/uploads/offers/${offerLetterFileName}`;
+    const offerBlob = await put(`offers/${offerLetterFileName}`, offerLetterBuffer, {
+      access: 'public',
+      token: process.env.BLOB_READ_WRITE_TOKEN,
+    });
+    const offerLetterUrl = offerBlob.url;
 
     // Generate NDA PDF
     const ndaDoc = await PDFDocument.create();
     const ndaPage = ndaDoc.addPage([612, 792]);
-    const { width: ndaWidth, height: ndaHeight } = ndaPage.getSize();
+    const { height: ndaHeight } = ndaPage.getSize();
     const ndaFont = await ndaDoc.embedFont(StandardFonts.Helvetica);
     const ndaBoldFont = await ndaDoc.embedFont(StandardFonts.HelveticaBold);
 
@@ -332,12 +330,15 @@ export async function POST(request: Request) {
       font: ndaFont,
     });
 
-    // Save NDA
+    // Save NDA to Vercel Blob - FIXED: Convert to Buffer
     const ndaBytes = await ndaDoc.save();
+    const ndaBuffer = Buffer.from(ndaBytes); // 👈 Convert Uint8Array to Buffer
     const ndaFileName = `nda_${uuidv4()}.pdf`;
-    const ndaPath = path.join(uploadDir, ndaFileName);
-    await writeFile(ndaPath, ndaBytes);
-    const ndaUrl = `/uploads/offers/${ndaFileName}`;
+    const ndaBlob = await put(`offers/${ndaFileName}`, ndaBuffer, {
+      access: 'public',
+      token: process.env.BLOB_READ_WRITE_TOKEN,
+    });
+    const ndaUrl = ndaBlob.url;
 
     // Save to database
     const offerDocument = await OfferDocument.create({
@@ -391,7 +392,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Error generating offer:', error);
     return NextResponse.json(
-      { error: 'Failed to generate offer documents' },
+      { error: 'Failed to generate offer documents: ' + (error as Error).message },
       { status: 500 }
     );
   }
