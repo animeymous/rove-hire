@@ -22,9 +22,9 @@ interface Candidate {
   };
   magicLinkToken?: string;
   isMagicLinkUsed?: boolean;
-  interviewRound?: 'Screening' | 'Technical' | 'Final' | 'Completed';  // 👈 ADD THIS
-  interviewCount?: number;                                               // 👈 ADD THIS
-  screeningPassed?: boolean;                                             // 👈 ADD THIS
+  interviewRound?: 'Screening' | 'Technical' | 'Final' | 'Completed';
+  interviewCount?: number;
+  screeningPassed?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -44,6 +44,7 @@ export default function CandidateProfilePage() {
   
   const [candidate, setCandidate] = useState<Candidate | null>(null);
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
+  const [offerDoc, setOfferDoc] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
 
@@ -61,6 +62,7 @@ export default function CandidateProfilePage() {
       if (response.ok) {
         setCandidate(data.candidate);
         setTimeline(data.timeline || []);
+        setOfferDoc(data.offerDoc);
       } else {
         console.error('Error:', data.error);
       }
@@ -76,6 +78,7 @@ export default function CandidateProfilePage() {
       'Applied': 'bg-blue-100 text-blue-800',
       'Form Submitted': 'bg-purple-100 text-purple-800',
       'Interview Scheduled': 'bg-yellow-100 text-yellow-800',
+      'Ready to Offer': 'bg-indigo-100 text-indigo-800',
       'Offer Sent': 'bg-orange-100 text-orange-800',
       'Hired': 'bg-green-100 text-green-800',
       'Rejected': 'bg-red-100 text-red-800',
@@ -299,6 +302,35 @@ export default function CandidateProfilePage() {
                 <p className="text-sm">{new Date(candidate.createdAt).toLocaleDateString()} at {new Date(candidate.createdAt).toLocaleTimeString()}</p>
               </div>
             </div>
+
+            {/* Offer Documents - Show ONLY when status is "Offer Sent" */}
+            {candidate.status === 'Offer Sent' && offerDoc && (
+              <div className="bg-white rounded-lg shadow p-6 border-2 border-green-200">
+                <h3 className="text-sm font-medium text-gray-500 mb-4">📄 Offer Documents</h3>
+                <div className="space-y-2">
+                  {offerDoc.offerLetterUrl && (
+                    <a
+                      href={`/api/offers/download?candidateId=${candidate._id}&type=offer`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm"
+                    >
+                      📄 Download Offer Letter
+                    </a>
+                  )}
+                  {offerDoc.ndaUrl && (
+                    <a
+                      href={`/api/offers/download?candidateId=${candidate._id}&type=nda`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm"
+                    >
+                      📄 Download NDA
+                    </a>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -323,24 +355,25 @@ export default function CandidateProfilePage() {
         </div>
       )}
 
-      {/* Actions Tab - Update the buttons */}
       {activeTab === 'actions' && (
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-medium text-gray-900 mb-4">Available Actions</h3>
           
           <div className="space-y-3">
-            {/* Schedule Interview - Show for Applied, Form Submitted, or Interview Scheduled */}
-            {['Applied', 'Form Submitted', 'Interview Scheduled'].includes(candidate.status) && (
+            {/* Schedule Interview - Show for Applied, Form Submitted, or Interview Scheduled with pending round */}
+            {(candidate.status === 'Applied' || 
+              candidate.status === 'Form Submitted' || 
+              (candidate.status === 'Interview Scheduled' && candidate.interviewRound !== 'Completed')) && (
               <button
                 onClick={() => router.push(`/candidates/${id}/schedule-interview`)}
                 className="w-full md:w-auto px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition text-left"
               >
-                📅 Schedule Interview
+                📅 Schedule {candidate.interviewRound && candidate.interviewRound !== 'Screening' ? `${candidate.interviewRound} ` : ''}Interview
               </button>
             )}
 
             {/* Show current interview progress */}
-            {candidate.status === 'Interview Scheduled' && candidate.interviewRound && (
+            {candidate.status === 'Interview Scheduled' && candidate.interviewRound && candidate.interviewRound !== 'Completed' && (
               <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
                 <p className="text-sm text-yellow-800">
                   🔄 Currently in <strong>{candidate.interviewRound}</strong> round
@@ -349,8 +382,8 @@ export default function CandidateProfilePage() {
               </div>
             )}
 
-            {/* Mark as Hired - Show after Offer Sent */}
-            {candidate.status === 'Offer Sent' && (
+            {/* Mark as Hired - Show when status is "Ready to Offer" */}
+            {candidate.status === 'Ready to Offer' && (
               <button
                 onClick={() => handleStatusChange('Hired')}
                 className="w-full md:w-auto px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition text-left"
@@ -359,7 +392,7 @@ export default function CandidateProfilePage() {
               </button>
             )}
 
-            {/* Generate Offer - ONLY Show for Hired candidates */}
+            {/* Generate Offer - Show when status is "HIRED" */}
             {candidate.status === 'Hired' && (
               <button
                 onClick={() => router.push(`/candidates/${id}/generate-offer`)}
@@ -369,34 +402,37 @@ export default function CandidateProfilePage() {
               </button>
             )}
 
-            {/* Offer Documents - Show if status is Offer Sent or Hired */}
-            {(candidate.status === 'Offer Sent' || candidate.status === 'Hired') && (
-              <div className="bg-gray-50 rounded-lg p-4 mt-2">
-                <h4 className="text-sm font-medium text-gray-700 mb-2">📄 Offer Documents</h4>
+            {/* Download Offer Documents - Show when status is "Offer Sent" */}
+            {candidate.status === 'Offer Sent' && offerDoc && (
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                <h4 className="text-sm font-medium text-green-800 mb-2">✅ Offer Documents Ready</h4>
                 <div className="space-y-2">
-                  <a
-                    href={`/api/offers/download?candidateId=${candidate._id}&type=offer`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm"
-                  >
-                    📄 Download Offer Letter
-                  </a>
-                  <br />
-                  <a
-                    href={`/api/offers/download?candidateId=${candidate._id}&type=nda`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm"
-                  >
-                    📄 Download NDA
-                  </a>
+                  {offerDoc.offerLetterUrl && (
+                    <a
+                      href={`/api/offers/download?candidateId=${candidate._id}&type=offer`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm"
+                    >
+                      📄 Download Offer Letter
+                    </a>
+                  )}
+                  {offerDoc.ndaUrl && (
+                    <a
+                      href={`/api/offers/download?candidateId=${candidate._id}&type=nda`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm"
+                    >
+                      📄 Download NDA
+                    </a>
+                  )}
                 </div>
               </div>
             )}
 
             {/* Reject - Show for any non-terminal status */}
-            {!['Hired', 'Rejected'].includes(candidate.status) && (
+            {!['Hired', 'Rejected', 'Offer Sent', 'Ready to Offer'].includes(candidate.status) && (
               <button
                 onClick={() => {
                   const reason = prompt('Please provide a reason for rejection:');
@@ -411,9 +447,21 @@ export default function CandidateProfilePage() {
             )}
 
             {/* Status Messages */}
+            {candidate.status === 'Ready to Offer' && (
+              <div className="p-4 bg-indigo-50 border border-indigo-200 rounded-md">
+                <p className="text-indigo-800">📋 Candidate is ready for offer. Click "Mark as Hired" to proceed.</p>
+              </div>
+            )}
+
             {candidate.status === 'Hired' && (
               <div className="p-4 bg-green-50 border border-green-200 rounded-md">
-                <p className="text-green-800">✅ This candidate has been hired!</p>
+                <p className="text-green-800">✅ This candidate has been hired and is ready for offer generation!</p>
+              </div>
+            )}
+
+            {candidate.status === 'Offer Sent' && (
+              <div className="p-4 bg-orange-50 border border-orange-200 rounded-md">
+                <p className="text-orange-800">📄 Offer has been sent to the candidate. Download the documents above.</p>
               </div>
             )}
 
@@ -424,7 +472,7 @@ export default function CandidateProfilePage() {
             )}
 
             {/* Delete - Show for non-hired candidates */}
-            {candidate.status !== 'Hired' && (
+            {candidate.status !== 'Hired' && candidate.status !== 'Offer Sent' && (
               <button
                 onClick={async () => {
                   if (confirm(`⚠️ Are you sure you want to delete ${candidate.name}? This cannot be undone.`)) {

@@ -9,14 +9,14 @@ export interface ICandidate extends Document {
   noticePeriod?: string;
   salaryExpectation?: string;
   linkedinUrl?: string;
-  status: 'Applied' | 'Form Submitted' | 'Interview Scheduled' | 'Offer Sent' | 'Hired' | 'Rejected';
+  status: 'Applied' | 'Form Submitted' | 'Interview Scheduled' | 'Ready to Offer' | 'Offer Sent' | 'Hired' | 'Rejected';
   resumeUrl?: string;
   jobId: mongoose.Types.ObjectId;
   magicLinkToken?: string;
   magicLinkExpiresAt?: Date;
   isMagicLinkUsed: boolean;
-  interviewCount?: number;
   interviewRound?: 'Screening' | 'Technical' | 'Final' | 'Completed';
+  interviewCount?: number;
   screeningPassed?: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -61,7 +61,7 @@ const CandidateSchema = new Schema<ICandidate>({
   },
   status: {
     type: String,
-    enum: ['Applied', 'Form Submitted', 'Interview Scheduled', 'Offer Sent', 'Hired', 'Rejected'],
+    enum: ['Applied', 'Form Submitted', 'Interview Scheduled', 'Ready to Offer', 'Offer Sent', 'Hired', 'Rejected'],
     default: 'Applied',
   },
   resumeUrl: {
@@ -107,15 +107,14 @@ const CandidateSchema = new Schema<ICandidate>({
   },
 });
 
-// Update timestamp on save
 CandidateSchema.pre('save', async function() {
   this.updatedAt = new Date();
 });
 
-// Index for faster queries
 CandidateSchema.index({ email: 1 });
 CandidateSchema.index({ jobId: 1 });
 CandidateSchema.index({ status: 1 });
 CandidateSchema.index({ magicLinkToken: 1 });
 
-export default (mongoose.models.Candidate as Model<ICandidate>) || mongoose.model<ICandidate>('Candidate', CandidateSchema);
+export default (mongoose.models.Candidate as Model<ICandidate>) || 
+  mongoose.model<ICandidate>('Candidate', CandidateSchema);

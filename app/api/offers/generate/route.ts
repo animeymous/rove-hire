@@ -363,7 +363,7 @@ export async function POST(request: Request) {
       ndaUrl,
     });
 
-    // Update candidate status
+    // 🔥 Update candidate status to "Offer Sent" (Final)
     candidate.status = 'Offer Sent';
     candidate.updatedAt = new Date();
     await candidate.save();

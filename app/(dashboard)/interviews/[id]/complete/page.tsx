@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 
+type Recommendation = 'Pass' | 'Fail' | 'Ready to Offer' | 'Maybe' | 'Reject';
+
 interface Interview {
   _id: string;
   candidateId: {
@@ -27,7 +29,10 @@ export default function CompleteInterviewPage() {
   const [loading, setLoading] = useState(false);
   const [interview, setInterview] = useState<Interview | null>(null);
   const [error, setError] = useState('');
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    feedback: string;
+    recommendation: Recommendation | '';
+  }>({
     feedback: '',
     recommendation: '',
   });
@@ -40,7 +45,6 @@ export default function CompleteInterviewPage() {
 
   const fetchInterview = async () => {
     try {
-      // ✅ FIX: Use ?id= format
       const response = await fetch(`/api/interviews/single?id=${id}`);
       const data = await response.json();
       if (response.ok) {
@@ -60,7 +64,6 @@ export default function CompleteInterviewPage() {
     setLoading(true);
 
     try {
-      // ✅ FIX: Use ?id= format for PATCH
       const response = await fetch(`/api/interviews/single?id=${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -82,8 +85,6 @@ export default function CompleteInterviewPage() {
           message += `\nNext Round: ${data.nextRound}`;
         }
         alert(message);
-        
-        // ✅ FIX: Navigate back to interviews page
         router.push('/interviews');
       } else {
         setError(data.error || 'Failed to complete interview');
@@ -95,7 +96,7 @@ export default function CompleteInterviewPage() {
     }
   };
 
-  const getRecommendationsForRound = (round: string) => {
+  const getRecommendationsForRound = (round: string): { value: Recommendation; label: string }[] => {
     switch (round) {
       case 'Screening':
         return [
@@ -104,13 +105,13 @@ export default function CompleteInterviewPage() {
         ];
       case 'Technical':
         return [
-          { value: 'Hire', label: '✅ Hire - Ready for Offer' },
+          { value: 'Ready to Offer', label: '✅ Ready to Offer - Move for HR Approval' },
           { value: 'Maybe', label: '🤔 Maybe - Move to Final' },
           { value: 'Reject', label: '❌ Reject' },
         ];
       case 'Final':
         return [
-          { value: 'Hire', label: '✅ Hire - Ready for Offer' },
+          { value: 'Ready to Offer', label: '✅ Ready to Offer - Move for HR Approval' },
           { value: 'Maybe', label: '🤔 Maybe - Hold' },
           { value: 'Reject', label: '❌ Reject' },
         ];
@@ -141,7 +142,6 @@ export default function CompleteInterviewPage() {
     return <div className="text-center py-8">Interview not found</div>;
   }
 
-  // ✅ FIX: Handle case where candidateId is null
   const candidateName = interview.candidateId?.name || 'Unknown Candidate';
   const candidateId = interview.candidateId?._id || '';
 
@@ -193,7 +193,7 @@ export default function CompleteInterviewPage() {
             <select
               required
               value={formData.recommendation}
-              onChange={(e) => setFormData({ ...formData, recommendation: e.target.value })}
+              onChange={(e) => setFormData({ ...formData, recommendation: e.target.value as Recommendation })}
               className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="">Select decision...</option>

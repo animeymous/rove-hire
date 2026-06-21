@@ -89,12 +89,15 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    // Check if trying to hire without offer
-    if (status === 'Hired' && candidate.status !== 'Offer Sent') {
-      return NextResponse.json(
-        { error: 'Cannot hire candidate without sending an offer first' },
-        { status: 400 }
-      );
+    // 🔥 UPDATED: Allow "Ready to Offer" → "Hired" transition
+    if (status === 'Hired') {
+      // Allow if candidate is "Ready to Offer" OR "Offer Sent"
+      if (candidate.status !== 'Ready to Offer' && candidate.status !== 'Offer Sent') {
+        return NextResponse.json(
+          { error: 'Cannot hire candidate. Candidate must be "Ready to Offer" or "Offer Sent" first.' },
+          { status: 400 }
+        );
+      }
     }
 
     // Check if already hired or rejected
@@ -112,6 +115,7 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
+    // Update candidate status
     candidate.status = status;
     candidate.updatedAt = new Date();
     await candidate.save();
@@ -173,7 +177,6 @@ export async function DELETE(request: NextRequest) {
 
     await connectToDatabase();
 
-    // Check if candidate exists
     const candidate = await Candidate.findById(id);
     if (!candidate) {
       return NextResponse.json(
@@ -183,32 +186,13 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Delete all associated data
-    console.log(`🗑️ Deleting candidate: ${candidate.name} (${id})`);
-
-    // 1. Delete timeline events
-    const timelineResult = await TimelineEvent.deleteMany({ candidateId: id });
-    console.log(`📋 Deleted ${timelineResult.deletedCount} timeline events`);
-
-    // 2. Delete interviews
-    const interviewResult = await Interview.deleteMany({ candidateId: id });
-    console.log(`📅 Deleted ${interviewResult.deletedCount} interviews`);
-
-    // 3. Delete offer documents
-    const offerResult = await OfferDocument.deleteMany({ candidateId: id });
-    console.log(`📄 Deleted ${offerResult.deletedCount} offer documents`);
-
-    // 4. Delete the candidate
+    await TimelineEvent.deleteMany({ candidateId: id });
+    await Interview.deleteMany({ candidateId: id });
+    await OfferDocument.deleteMany({ candidateId: id });
     await candidate.deleteOne();
-    console.log(`✅ Candidate deleted successfully`);
 
     return NextResponse.json({
       message: 'Candidate and all associated data deleted successfully',
-      deleted: {
-        candidate: candidate.name,
-        timeline: timelineResult.deletedCount,
-        interviews: interviewResult.deletedCount,
-        offers: offerResult.deletedCount,
-      }
     }, { status: 200 });
   } catch (error) {
     console.error('Error deleting candidate:', error);

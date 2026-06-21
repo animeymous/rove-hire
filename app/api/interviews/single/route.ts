@@ -6,6 +6,8 @@ import TimelineEvent from '@/lib/models/TimelineEvent';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 
+type Recommendation = 'Pass' | 'Fail' | 'Ready to Offer' | 'Maybe' | 'Reject';
+
 // GET - Get single interview
 export async function GET(request: NextRequest) {
   try {
@@ -96,16 +98,51 @@ export async function PATCH(request: NextRequest) {
       await interview.save();
     }
 
-    // Validate recommendation is valid for the round
-    const validRecommendations: Record<string, string[]> = {
-      'Screening': ['Pass', 'Fail'],
-      'Technical': ['Hire', 'Maybe', 'Reject'],
-      'Final': ['Hire', 'Maybe', 'Reject'],
+    // Normalize recommendation (handle "Ready to Offer" specifically)
+    const normalizeRecommendation = (value: string): Recommendation => {
+      // Handle "Ready to Offer" specifically (case insensitive)
+      if (value.toLowerCase() === 'ready to offer') {
+        return 'Ready to Offer';
+      }
+      // Handle "Pass" (case insensitive)
+      if (value.toLowerCase() === 'pass') {
+        return 'Pass';
+      }
+      // Handle "Fail" (case insensitive)
+      if (value.toLowerCase() === 'fail') {
+        return 'Fail';
+      }
+      // Handle "Maybe" (case insensitive)
+      if (value.toLowerCase() === 'maybe') {
+        return 'Maybe';
+      }
+      // Handle "Reject" (case insensitive)
+      if (value.toLowerCase() === 'reject') {
+        return 'Reject';
+      }
+      // Default: capitalize first letter and try to match
+      const capitalized = value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+      // Check if it's a valid Recommendation
+      const validRecommendations: Recommendation[] = ['Pass', 'Fail', 'Ready to Offer', 'Maybe', 'Reject'];
+      if (validRecommendations.includes(capitalized as Recommendation)) {
+        return capitalized as Recommendation;
+      }
+      // Default fallback based on round
+      if (round === 'Screening') {
+        return 'Pass';
+      }
+      return 'Ready to Offer';
     };
 
-    // Normalize recommendation (capitalize first letter)
-    const normalizedRecommendation = recommendation.charAt(0).toUpperCase() + recommendation.slice(1).toLowerCase();
-    
+    const normalizedRecommendation = normalizeRecommendation(recommendation);
+
+    // Validate recommendation is valid for the round
+    const validRecommendations: Record<string, Recommendation[]> = {
+      'Screening': ['Pass', 'Fail'],
+      'Technical': ['Ready to Offer', 'Maybe', 'Reject'],
+      'Final': ['Ready to Offer', 'Maybe', 'Reject'],
+    };
+
     // Check if valid for this round
     if (!validRecommendations[round]?.includes(normalizedRecommendation)) {
       return NextResponse.json(
@@ -116,10 +153,10 @@ export async function PATCH(request: NextRequest) {
       );
     }
 
-    // Update interview
+    // Update interview with proper type
     interview.status = 'Completed';
     interview.feedback = feedback;
-    interview.recommendation = normalizedRecommendation;
+    interview.recommendation = normalizedRecommendation; // Now it's the correct type
     interview.isCompleted = true;
     interview.updatedAt = new Date();
     await interview.save();
@@ -128,7 +165,6 @@ export async function PATCH(request: NextRequest) {
     // 🔥 SCREENING ROUND: Pass or Fail
     if (round === 'Screening') {
       if (normalizedRecommendation === 'Pass') {
-        // ✅ Screening passed - move to Technical
         candidate.status = 'Interview Scheduled';
         candidate.interviewRound = 'Technical';
         candidate.screeningPassed = true;
@@ -157,7 +193,6 @@ export async function PATCH(request: NextRequest) {
         }, { status: 200 });
 
       } else if (normalizedRecommendation === 'Fail') {
-        // ❌ Screening failed - reject
         candidate.status = 'Rejected';
         candidate.interviewRound = 'Completed';
         await candidate.save();
@@ -183,18 +218,18 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
-    // 🔥 TECHNICAL ROUND: Hire, Maybe, or Reject
+    // 🔥 TECHNICAL ROUND: Ready to Offer, Maybe, or Reject
     if (round === 'Technical') {
-      if (normalizedRecommendation === 'Hire') {
-        // ✅ Technical passed - ready for offer
-        candidate.status = 'Offer Sent';
+      if (normalizedRecommendation === 'Ready to Offer') {
+        // ✅ Technical passed - ready for HR approval
+        candidate.status = 'Ready to Offer';
         candidate.interviewRound = 'Completed';
         await candidate.save();
 
         await TimelineEvent.create({
           candidateId: candidate._id,
           type: 'INTERVIEW_COMPLETED',
-          description: `✅ Technical interview PASSED for ${candidate.name}. Ready for offer.`,
+          description: `✅ Technical interview PASSED for ${candidate.name}. Ready for offer approval.`,
           metadata: {
             interviewId: interview._id,
             feedback,
@@ -206,20 +241,19 @@ export async function PATCH(request: NextRequest) {
         await TimelineEvent.create({
           candidateId: candidate._id,
           type: 'NOTE_ADDED',
-          description: `🎯 Candidate cleared all interviews. Ready for offer letter.`,
+          description: `🎯 Candidate cleared all interviews. Waiting for HR approval.`,
           metadata: { recommendation: normalizedRecommendation },
         });
 
         return NextResponse.json({
-          message: 'Technical interview completed. Candidate ready for offer!',
+          message: 'Technical interview completed. Candidate ready for HR approval!',
           candidate,
           interview,
           nextAction: 'Mark as Hired',
-          nextRound: 'Offer Sent',
+          nextRound: 'Hired',
         }, { status: 200 });
 
       } else if (normalizedRecommendation === 'Maybe') {
-        // 🤔 Technical maybe - move to Final
         candidate.status = 'Interview Scheduled';
         candidate.interviewRound = 'Final';
         candidate.interviewCount = (candidate.interviewCount || 0) + 1;
@@ -247,7 +281,6 @@ export async function PATCH(request: NextRequest) {
         }, { status: 200 });
 
       } else if (normalizedRecommendation === 'Reject') {
-        // ❌ Technical failed - reject
         candidate.status = 'Rejected';
         candidate.interviewRound = 'Completed';
         await candidate.save();
@@ -273,18 +306,17 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
-    // 🔥 FINAL ROUND: Hire, Maybe, or Reject
+    // 🔥 FINAL ROUND: Ready to Offer, Maybe, or Reject
     if (round === 'Final') {
-      if (normalizedRecommendation === 'Hire') {
-        // ✅ Final passed - ready for offer
-        candidate.status = 'Offer Sent';
+      if (normalizedRecommendation === 'Ready to Offer') {
+        candidate.status = 'Ready to Offer';
         candidate.interviewRound = 'Completed';
         await candidate.save();
 
         await TimelineEvent.create({
           candidateId: candidate._id,
           type: 'INTERVIEW_COMPLETED',
-          description: `🎉 Final interview PASSED for ${candidate.name}!`,
+          description: `🎉 Final interview PASSED for ${candidate.name}! Ready for offer approval.`,
           metadata: {
             interviewId: interview._id,
             feedback,
@@ -294,15 +326,14 @@ export async function PATCH(request: NextRequest) {
         });
 
         return NextResponse.json({
-          message: 'Final interview completed. Candidate ready for offer!',
+          message: 'Final interview completed. Candidate ready for HR approval!',
           candidate,
           interview,
           nextAction: 'Mark as Hired',
-          nextRound: 'Offer Sent',
+          nextRound: 'Hired',
         }, { status: 200 });
 
       } else if (normalizedRecommendation === 'Maybe') {
-        // 🤔 Final maybe - on hold
         await TimelineEvent.create({
           candidateId: candidate._id,
           type: 'INTERVIEW_COMPLETED',
@@ -323,7 +354,6 @@ export async function PATCH(request: NextRequest) {
         }, { status: 200 });
 
       } else if (normalizedRecommendation === 'Reject') {
-        // ❌ Final failed - reject
         candidate.status = 'Rejected';
         candidate.interviewRound = 'Completed';
         await candidate.save();
