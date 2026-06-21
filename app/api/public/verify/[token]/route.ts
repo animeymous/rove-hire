@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import Candidate from '@/lib/models/Candidate';
+import Job from '@/lib/models/Job';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ token: string }> }
 ) {
   try {
-    // 👈 AWAIT the params
     const { token } = await params;
 
     console.log('🔍 Verifying token:', token);
@@ -20,9 +20,7 @@ export async function GET(
     }
 
     await connectToDatabase();
-    console.log('✅ Database connected');
 
-    // Find candidate with this token
     const candidate = await Candidate.findOne({
       magicLinkToken: token,
     }).populate('jobId', 'title');
@@ -65,7 +63,7 @@ export async function GET(
   } catch (error) {
     console.error('❌ Error verifying link:', error);
     return NextResponse.json(
-      { error: 'Failed to verify link' },
+      { error: 'Failed to verify link: ' + (error as Error).message },
       { status: 500 }
     );
   }
