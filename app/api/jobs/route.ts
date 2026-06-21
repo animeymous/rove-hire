@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import Job from '@/lib/models/Job';
+import Candidate from '@/lib/models/Candidate';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 
-// GET all jobs
+// GET - Get all jobs
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
@@ -19,7 +20,7 @@ export async function GET() {
   } catch (error) {
     console.error('Error fetching jobs:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch jobs' },
+      { error: 'Failed to fetch jobs: ' + (error as Error).message },
       { status: 500 }
     );
   }
@@ -61,7 +62,7 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error('Error creating job:', error);
     return NextResponse.json(
-      { error: 'Failed to create job' },
+      { error: 'Failed to create job: ' + (error as Error).message },
       { status: 500 }
     );
   }

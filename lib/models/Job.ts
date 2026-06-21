@@ -4,7 +4,7 @@ export interface IJob extends Document {
   title: string;
   description: string;
   skills: string[];
-  status: 'Open' | 'Closed';
+  status: 'Open' | 'On Hold' | 'Closed';
   createdAt: Date;
   updatedAt: Date;
   candidateCount?: number;
@@ -26,7 +26,7 @@ const JobSchema = new Schema<IJob>({
   },
   status: {
     type: String,
-    enum: ['Open', 'Closed'],
+    enum: ['Open', 'On Hold', 'Closed'],
     default: 'Open',
   },
   createdAt: {
@@ -39,12 +39,10 @@ const JobSchema = new Schema<IJob>({
   },
 });
 
-// Update timestamp on save
 JobSchema.pre('save', async function() {
   this.updatedAt = new Date();
 });
 
-// Virtual field for candidate count
 JobSchema.virtual('candidateCount', {
   ref: 'Candidate',
   localField: '_id',
@@ -52,7 +50,6 @@ JobSchema.virtual('candidateCount', {
   count: true,
 });
 
-// Include virtuals in JSON output
 JobSchema.set('toJSON', { virtuals: true });
 JobSchema.set('toObject', { virtuals: true });
 
