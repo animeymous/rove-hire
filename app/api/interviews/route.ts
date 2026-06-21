@@ -6,6 +6,32 @@ import TimelineEvent from '@/lib/models/TimelineEvent';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 
+// Helper function to determine allowed interview rounds
+function getAllowedRounds(candidate: any): string[] {
+  // If no interviews completed yet
+  if (!candidate.interviewCount || candidate.interviewCount === 0) {
+    return ['Screening'];
+  }
+  
+  // If screening was passed
+  if (candidate.screeningPassed) {
+    // Check current round to determine next allowed
+    if (candidate.interviewRound === 'Screening' || candidate.interviewRound === 'Technical') {
+      return ['Technical'];
+    }
+    if (candidate.interviewRound === 'Final') {
+      return ['Final'];
+    }
+  }
+  
+  // If screening not passed
+  if (!candidate.screeningPassed) {
+    return ['Screening'];
+  }
+  
+  return ['Screening'];
+}
+
 // GET - Get all interviews with pagination
 export async function GET(request: NextRequest) {
   try {
@@ -29,16 +55,20 @@ export async function GET(request: NextRequest) {
     } else if (filter === 'completed') {
       query.status = 'Completed';
     }
+    // For 'all', no filter is applied
 
-    // Get total count for pagination
+    console.log('🔍 Interview query:', query);
+
     const total = await Interview.countDocuments(query);
+    console.log('📊 Total interviews:', total);
 
-    // Get interviews with pagination
     const interviews = await Interview.find(query)
       .populate('candidateId', 'name email')
       .sort({ date: 1 })
       .skip(skip)
       .limit(limit);
+
+    console.log('📝 Interviews found:', interviews.length);
 
     return NextResponse.json({
       interviews,
@@ -63,7 +93,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { candidateId, date, time, type, interviewerName, notes, round } = await request.json();
+    const { candidateId, date, time, type, interviewerName, notes } = await request.json();
 
     // Validate
     if (!candidateId || !date || !time || !type || !interviewerName) {
@@ -75,7 +105,6 @@ export async function POST(request: Request) {
 
     await connectToDatabase();
 
-    // Check if candidate exists
     const candidate = await Candidate.findById(candidateId);
     if (!candidate) {
       return NextResponse.json(
@@ -107,12 +136,32 @@ export async function POST(request: Request) {
       );
     }
 
-    // Determine round - if not provided, use the next round based on candidate's current round
-    let interviewRound = round;
-    if (!interviewRound) {
-      const rounds = ['Screening', 'Technical', 'Final'];
-      const currentRoundIndex = rounds.indexOf(candidate.interviewRound || 'Screening');
-      interviewRound = rounds[currentRoundIndex] || 'Screening';
+    // Determine allowed rounds based on candidate's progress
+    const allowedRounds = getAllowedRounds(candidate);
+    if (!allowedRounds.includes(type)) {
+      return NextResponse.json(
+        { 
+          error: `Cannot schedule ${type} interview. Allowed rounds: ${allowedRounds.join(', ')}`,
+          currentStatus: candidate.status,
+          currentRound: candidate.interviewRound,
+          screeningPassed: candidate.screeningPassed,
+        },
+        { status: 400 }
+      );
+    }
+
+    // Check if there's already a scheduled interview of this type
+    const existingInterview = await Interview.findOne({
+      candidateId,
+      round: type,
+      status: 'Scheduled',
+    });
+
+    if (existingInterview) {
+      return NextResponse.json(
+        { error: `${type} interview already scheduled for this candidate` },
+        { status: 400 }
+      );
     }
 
     // Create interview
@@ -123,13 +172,13 @@ export async function POST(request: Request) {
       type,
       interviewerName,
       notes,
-      round: interviewRound,
+      round: type,
       status: 'Scheduled',
     });
 
-    // Update candidate status and round
+    // Update candidate status
     candidate.status = 'Interview Scheduled';
-    candidate.interviewRound = interviewRound;
+    candidate.interviewRound = type;
     candidate.interviewCount = (candidate.interviewCount || 0) + 1;
     candidate.updatedAt = new Date();
     await candidate.save();
@@ -138,20 +187,20 @@ export async function POST(request: Request) {
     await TimelineEvent.create({
       candidateId: candidate._id,
       type: 'INTERVIEW_SCHEDULED',
-      description: `${interviewRound} interview scheduled for ${candidate.name} (${type}) with ${interviewerName}`,
+      description: `${type} interview scheduled for ${candidate.name} with ${interviewerName}`,
       metadata: {
         interviewId: interview._id,
         date,
         time,
         type,
         interviewerName,
-        round: interviewRound,
+        round: type,
       },
     });
 
     return NextResponse.json(
       { 
-        message: `${interviewRound} interview scheduled successfully`,
+        message: `${type} interview scheduled successfully`,
         interview,
         candidate,
       },

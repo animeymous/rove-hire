@@ -22,6 +22,9 @@ interface Candidate {
   };
   magicLinkToken?: string;
   isMagicLinkUsed?: boolean;
+  interviewRound?: 'Screening' | 'Technical' | 'Final' | 'Completed';  // 👈 ADD THIS
+  interviewCount?: number;                                               // 👈 ADD THIS
+  screeningPassed?: boolean;                                             // 👈 ADD THIS
   createdAt: string;
   updatedAt: string;
 }
@@ -320,19 +323,30 @@ export default function CandidateProfilePage() {
         </div>
       )}
 
+      {/* Actions Tab - Update the buttons */}
       {activeTab === 'actions' && (
         <div className="bg-white rounded-lg shadow p-6">
           <h3 className="text-lg font-medium text-gray-900 mb-4">Available Actions</h3>
           
           <div className="space-y-3">
-            {/* Schedule Interview - Show for Applied or Form Submitted */}
-            {(candidate.status === 'Applied' || candidate.status === 'Form Submitted') && (
+            {/* Schedule Interview - Show for Applied, Form Submitted, or Interview Scheduled */}
+            {['Applied', 'Form Submitted', 'Interview Scheduled'].includes(candidate.status) && (
               <button
                 onClick={() => router.push(`/candidates/${id}/schedule-interview`)}
                 className="w-full md:w-auto px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition text-left"
               >
                 📅 Schedule Interview
               </button>
+            )}
+
+            {/* Show current interview progress */}
+            {candidate.status === 'Interview Scheduled' && candidate.interviewRound && (
+              <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                <p className="text-sm text-yellow-800">
+                  🔄 Currently in <strong>{candidate.interviewRound}</strong> round
+                  {candidate.interviewCount && ` (Interview #${candidate.interviewCount + 1})`}
+                </p>
+              </div>
             )}
 
             {/* Mark as Hired - Show after Offer Sent */}

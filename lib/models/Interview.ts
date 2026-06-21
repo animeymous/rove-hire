@@ -4,14 +4,14 @@ export interface IInterview extends Document {
   candidateId: mongoose.Types.ObjectId;
   date: Date;
   time: string;
-  type: 'Screening' | 'Technical';
+  type: 'Screening' | 'Technical' | 'Final';
   interviewerName: string;
   notes?: string;
-  round?: string;
+  round: 'Screening' | 'Technical' | 'Final';
   status: 'Scheduled' | 'Completed' | 'Cancelled';
   feedback?: string;
-  recommendation?: 'Hire' | 'No Hire' | 'Maybe';
-  isCompleted?: boolean;
+  recommendation?: 'Pass' | 'Fail' | 'Hire' | 'Maybe' | 'Reject';
+  isCompleted: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -32,7 +32,7 @@ const InterviewSchema = new Schema<IInterview>({
   },
   type: {
     type: String,
-    enum: ['Screening', 'Technical'],
+    enum: ['Screening', 'Technical', 'Final'],
     required: [true, 'Please provide interview type'],
   },
   interviewerName: {
@@ -43,6 +43,11 @@ const InterviewSchema = new Schema<IInterview>({
   notes: {
     type: String,
     trim: true,
+  },
+  round: {
+    type: String,
+    enum: ['Screening', 'Technical', 'Final'],
+    required: [true, 'Please provide interview round'],
   },
   status: {
     type: String,
@@ -55,12 +60,7 @@ const InterviewSchema = new Schema<IInterview>({
   },
   recommendation: {
     type: String,
-    enum: ['Hire', 'No Hire', 'Maybe'],
-  },
-  round: {
-    type: String,
-    enum: ['Screening', 'Technical', 'Final'],
-    default: 'Screening',
+    enum: ['Pass', 'Fail', 'Hire', 'Maybe', 'Reject'],
   },
   isCompleted: {
     type: Boolean,

@@ -15,8 +15,9 @@ export interface ICandidate extends Document {
   magicLinkToken?: string;
   magicLinkExpiresAt?: Date;
   isMagicLinkUsed: boolean;
-  interviewRound?: string;
   interviewCount?: number;
+  interviewRound?: 'Screening' | 'Technical' | 'Final' | 'Completed';
+  screeningPassed?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -85,12 +86,16 @@ const CandidateSchema = new Schema<ICandidate>({
   },
   interviewRound: {
     type: String,
-    enum: ['Screening', 'Technical', 'Final'],
+    enum: ['Screening', 'Technical', 'Final', 'Completed'],
     default: 'Screening',
   },
   interviewCount: {
     type: Number,
     default: 0,
+  },
+  screeningPassed: {
+    type: Boolean,
+    default: false,
   },
   createdAt: {
     type: Date,

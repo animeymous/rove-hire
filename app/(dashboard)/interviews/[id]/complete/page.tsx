@@ -10,10 +10,10 @@ interface Interview {
     _id: string;
     name: string;
     email: string;
-  };
+  } | null;
   date: string;
   time: string;
-  type: 'Screening' | 'Technical';
+  round: 'Screening' | 'Technical' | 'Final';
   interviewerName: string;
   status: string;
   notes?: string;
@@ -29,8 +29,7 @@ export default function CompleteInterviewPage() {
   const [error, setError] = useState('');
   const [formData, setFormData] = useState({
     feedback: '',
-    recommendation: 'Maybe',
-    status: 'Completed',
+    recommendation: '',
   });
 
   useEffect(() => {
@@ -41,7 +40,7 @@ export default function CompleteInterviewPage() {
 
   const fetchInterview = async () => {
     try {
-      // Use the single endpoint with query parameter
+      // ✅ FIX: Use ?id= format
       const response = await fetch(`/api/interviews/single?id=${id}`);
       const data = await response.json();
       if (response.ok) {
@@ -61,17 +60,31 @@ export default function CompleteInterviewPage() {
     setLoading(true);
 
     try {
-      // Use the single endpoint with query parameter for PATCH
+      // ✅ FIX: Use ?id= format for PATCH
       const response = await fetch(`/api/interviews/single?id=${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          status: 'Completed',
+          feedback: formData.feedback,
+          recommendation: formData.recommendation,
+        }),
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        router.push(`/candidates/${interview?.candidateId._id}`);
+        let message = 'Interview completed successfully!';
+        if (data.nextAction) {
+          message += `\n\nNext Action: ${data.nextAction}`;
+        }
+        if (data.nextRound) {
+          message += `\nNext Round: ${data.nextRound}`;
+        }
+        alert(message);
+        
+        // ✅ FIX: Navigate back to interviews page
+        router.push('/interviews');
       } else {
         setError(data.error || 'Failed to complete interview');
       }
@@ -79,6 +92,33 @@ export default function CompleteInterviewPage() {
       setError('Failed to complete interview');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const getRecommendationsForRound = (round: string) => {
+    switch (round) {
+      case 'Screening':
+        return [
+          { value: 'Pass', label: '✅ Pass - Move to Technical' },
+          { value: 'Fail', label: '❌ Fail - Reject Candidate' },
+        ];
+      case 'Technical':
+        return [
+          { value: 'Hire', label: '✅ Hire - Ready for Offer' },
+          { value: 'Maybe', label: '🤔 Maybe - Move to Final' },
+          { value: 'Reject', label: '❌ Reject' },
+        ];
+      case 'Final':
+        return [
+          { value: 'Hire', label: '✅ Hire - Ready for Offer' },
+          { value: 'Maybe', label: '🤔 Maybe - Hold' },
+          { value: 'Reject', label: '❌ Reject' },
+        ];
+      default:
+        return [
+          { value: 'Pass', label: '✅ Pass' },
+          { value: 'Fail', label: '❌ Fail' },
+        ];
     }
   };
 
@@ -101,22 +141,28 @@ export default function CompleteInterviewPage() {
     return <div className="text-center py-8">Interview not found</div>;
   }
 
+  // ✅ FIX: Handle case where candidateId is null
+  const candidateName = interview.candidateId?.name || 'Unknown Candidate';
+  const candidateId = interview.candidateId?._id || '';
+
+  const recommendations = getRecommendationsForRound(interview.round);
+
   return (
     <div className="max-w-2xl mx-auto">
       <div className="mb-6">
-        <Link href={`/candidates/${interview.candidateId._id}`} className="text-blue-600 hover:text-blue-800">
-          ← Back to Candidate Profile
+        <Link href="/interviews" className="text-blue-600 hover:text-blue-800">
+          ← Back to Interviews
         </Link>
       </div>
 
       <div className="bg-white rounded-lg shadow p-6">
-        <h1 className="text-2xl font-bold text-gray-900 mb-2">Complete Interview</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Complete {interview.round} Interview</h1>
         
         <div className="bg-gray-50 rounded-lg p-4 mb-6">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <p className="text-sm text-gray-500">Candidate</p>
-              <p className="font-medium">{interview.candidateId.name}</p>
+              <p className="font-medium">{candidateName}</p>
             </div>
             <div>
               <p className="text-sm text-gray-500">Interviewer</p>
@@ -142,17 +188,20 @@ export default function CompleteInterviewPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700">
-              Recommendation *
+              Decision *
             </label>
             <select
               required
               value={formData.recommendation}
-              onChange={(e) => setFormData({ ...formData, recommendation: e.target.value as 'Hire' | 'No Hire' | 'Maybe' })}
+              onChange={(e) => setFormData({ ...formData, recommendation: e.target.value })}
               className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
             >
-              <option value="Hire">✅ Hire</option>
-              <option value="Maybe">🤔 Maybe</option>
-              <option value="No Hire">❌ No Hire</option>
+              <option value="">Select decision...</option>
+              {recommendations.map((rec) => (
+                <option key={rec.value} value={rec.value}>
+                  {rec.label}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -173,7 +222,7 @@ export default function CompleteInterviewPage() {
           <div className="flex gap-3">
             <button
               type="button"
-              onClick={() => router.push(`/candidates/${interview.candidateId._id}`)}
+              onClick={() => router.push('/interviews')}
               className="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50 transition"
             >
               Cancel

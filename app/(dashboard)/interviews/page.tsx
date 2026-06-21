@@ -9,15 +9,15 @@ interface Interview {
     _id: string;
     name: string;
     email: string;
-  };
+  } | null;
   date: string;
   time: string;
-  type: 'Screening' | 'Technical';
+  type: 'Screening' | 'Technical' | 'Final';
   interviewerName: string;
   status: 'Scheduled' | 'Completed' | 'Cancelled';
   notes?: string;
   feedback?: string;
-  recommendation?: 'Hire' | 'No Hire' | 'Maybe';
+  recommendation?: string;
   createdAt: string;
 }
 
@@ -41,7 +41,7 @@ export default function InterviewsPage() {
       const data = await response.json();
       
       if (response.ok) {
-        setInterviews(data.interviews);
+        setInterviews(data.interviews || []);
         setTotalPages(data.totalPages || 1);
         setTotalItems(data.total || 0);
       }
@@ -65,13 +65,14 @@ export default function InterviewsPage() {
     const colors: Record<string, string> = {
       'Screening': 'bg-blue-100 text-blue-800',
       'Technical': 'bg-purple-100 text-purple-800',
+      'Final': 'bg-indigo-100 text-indigo-800',
     };
     return colors[type] || 'bg-gray-100 text-gray-800';
   };
 
   const handleFilterChange = (newFilter: string) => {
     setFilter(newFilter);
-    setCurrentPage(1); // Reset to first page when filter changes
+    setCurrentPage(1);
   };
 
   if (loading) {
@@ -134,7 +135,7 @@ export default function InterviewsPage() {
                     Date & Time
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Type
+                    Round
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Interviewer
@@ -148,84 +149,101 @@ export default function InterviewsPage() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {interviews.map((interview) => (
-                  <tr key={interview._id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4">
-                      <Link 
-                        href={`/candidates/${interview.candidateId._id}`}
-                        className="text-sm font-medium text-blue-600 hover:text-blue-800"
-                      >
-                        {interview.candidateId.name}
-                      </Link>
-                      <p className="text-xs text-gray-500">{interview.candidateId.email}</p>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm text-gray-900">
-                        {new Date(interview.date).toLocaleDateString()}
-                      </div>
-                      <div className="text-xs text-gray-500">{interview.time}</div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`px-2 py-1 text-xs rounded-full ${getTypeBadge(interview.type)}`}>
-                        {interview.type}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-900">
-                      {interview.interviewerName}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(interview.status)}`}>
-                        {interview.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm">
-                      {interview.status === 'Scheduled' && (
-                        <Link
-                          href={`/interviews/${interview._id}/complete`}
-                          className="text-blue-600 hover:text-blue-800"
-                        >
-                          Mark Complete
-                        </Link>
-                      )}
-                      {interview.status === 'Completed' && interview.feedback && (
-                        <span className="text-gray-500 text-xs">✅ Feedback given</span>
-                      )}
-                      {interview.status === 'Completed' && !interview.feedback && (
-                        <span className="text-gray-500 text-xs">⚠️ No feedback</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {interviews.map((interview) => {
+                  // SAFE ACCESS with null checks
+                  const candidateId = interview.candidateId?._id || '';
+                  const candidateName = interview.candidateId?.name || 'Unknown Candidate';
+                  const candidateEmail = interview.candidateId?.email || '';
+
+                  return (
+                    <tr key={interview._id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4">
+                        {candidateId ? (
+                          <Link 
+                            href={`/candidates/${candidateId}`}
+                            className="text-sm font-medium text-blue-600 hover:text-blue-800"
+                          >
+                            {candidateName}
+                          </Link>
+                        ) : (
+                          <span className="text-sm font-medium text-gray-400">
+                            {candidateName}
+                          </span>
+                        )}
+                        {candidateEmail && (
+                          <p className="text-xs text-gray-500">{candidateEmail}</p>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm text-gray-900">
+                          {new Date(interview.date).toLocaleDateString()}
+                        </div>
+                        <div className="text-xs text-gray-500">{interview.time}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2 py-1 text-xs rounded-full ${getTypeBadge(interview.type)}`}>
+                          {interview.type || 'N/A'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-900">
+                        {interview.interviewerName || 'N/A'}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(interview.status)}`}>
+                          {interview.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm">
+                        {interview.status === 'Scheduled' && candidateId && (
+                          <Link
+                            href={`/interviews/${interview._id}/complete`}
+                            className="text-blue-600 hover:text-blue-800"
+                          >
+                            Mark Complete
+                          </Link>
+                        )}
+                        {interview.status === 'Completed' && interview.feedback && (
+                          <span className="text-gray-500 text-xs">✅ Feedback given</span>
+                        )}
+                        {interview.status === 'Completed' && !interview.feedback && (
+                          <span className="text-gray-500 text-xs">⚠️ No feedback</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
 
           {/* Pagination */}
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-6">
-            <div className="text-sm text-gray-500">
-              Showing {interviews.length} of {totalItems} interviews
-              {filter !== 'all' && ` (filtered: ${filter})`}
+          {totalPages > 1 && (
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mt-6">
+              <div className="text-sm text-gray-500">
+                Showing {interviews.length} of {totalItems} interviews
+                {filter !== 'all' && ` (filtered: ${filter})`}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="px-4 py-2 border rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                >
+                  Previous
+                </button>
+                <span className="px-4 py-2 flex items-center text-sm text-gray-600">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className="px-4 py-2 border rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                >
+                  Next
+                </button>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                disabled={currentPage === 1}
-                className="px-4 py-2 border rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
-              >
-                Previous
-              </button>
-              <span className="px-4 py-2 flex items-center text-sm text-gray-600">
-                Page {currentPage} of {totalPages}
-              </span>
-              <button
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                disabled={currentPage === totalPages}
-                className="px-4 py-2 border rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
-              >
-                Next
-              </button>
-            </div>
-          </div>
+          )}
         </>
       )}
     </div>
