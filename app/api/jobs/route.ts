@@ -14,9 +14,22 @@ export async function GET() {
     }
 
     await connectToDatabase();
+    
+    // Get all jobs
     const jobs = await Job.find({}).sort({ createdAt: -1 });
     
-    return NextResponse.json({ jobs }, { status: 200 });
+    // Get candidate count for each job
+    const jobsWithCount = await Promise.all(
+      jobs.map(async (job) => {
+        const candidateCount = await Candidate.countDocuments({ jobId: job._id });
+        return {
+          ...job.toJSON(),
+          candidateCount,
+        };
+      })
+    );
+    
+    return NextResponse.json({ jobs: jobsWithCount }, { status: 200 });
   } catch (error) {
     console.error('Error fetching jobs:', error);
     return NextResponse.json(
