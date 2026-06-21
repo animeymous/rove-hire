@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import Candidate from '@/lib/models/Candidate';
 import Job from '@/lib/models/Job';
@@ -7,52 +7,39 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 import { v4 as uuidv4 } from 'uuid';
 
-// GET all candidates
-// export async function GET() {
-//   try {
-//     const session = await getServerSession(authOptions);
-//     if (!session) {
-//       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-//     }
-
-//     await connectToDatabase();
-//     const candidates = await Candidate.find({})
-//       .populate('jobId', 'title')
-//       .sort({ createdAt: -1 });
-    
-//     return NextResponse.json({ candidates }, { status: 200 });
-//   } catch (error) {
-//     console.error('Error fetching candidates:', error);
-//     return NextResponse.json(
-//       { error: 'Failed to fetch candidates' },
-//       { status: 500 }
-//     );
-//   }
-// }
-
-// GET all candidates
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    const searchParams = request.nextUrl.searchParams;
+    const page = parseInt(searchParams.get('page') || '1');
+    const limit = parseInt(searchParams.get('limit') || '10');
+    const skip = (page - 1) * limit;
+
     await connectToDatabase();
-    const candidates = await Candidate.find({})
-      .populate('jobId', 'title')
-      .sort({ createdAt: -1 });
-    
-    return NextResponse.json({ candidates }, { status: 200 });
+
+    const [candidates, total] = await Promise.all([
+      Candidate.find({})
+        .populate('jobId', 'title')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      Candidate.countDocuments({}),
+    ]);
+
+    return NextResponse.json({
+      candidates,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit),
+    }, { status: 200 });
   } catch (error) {
-    console.error('Error fetching candidates:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch candidates' },
-      { status: 500 }
-    );
+    // ... error handling
   }
 }
-
 // POST - Create a new candidate
 export async function POST(request: Request) {
   try {

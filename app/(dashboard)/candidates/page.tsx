@@ -17,17 +17,22 @@ export default function CandidatesPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const itemsPerPage = 5;
 
   useEffect(() => {
     fetchCandidates();
   }, []);
 
-  const fetchCandidates = async () => {
+
+  const fetchCandidates = async (page = 1) => {
     try {
-      const response = await fetch('/api/candidates');
+      const response = await fetch(`/api/candidates?page=${page}&limit=${itemsPerPage}`);
       const data = await response.json();
       if (response.ok) {
         setCandidates(data.candidates);
+        setTotalPages(data.totalPages || 1);
       }
     } catch (error) {
       console.error('Error fetching candidates:', error);
@@ -35,6 +40,10 @@ export default function CandidatesPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchCandidates(currentPage);
+  }, [currentPage]);
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
@@ -156,6 +165,29 @@ export default function CandidatesPage() {
             </tbody>
           </table>
         )}
+      </div>
+
+      {/* Pagination */}
+      <div className="flex justify-between items-center mt-4">
+        <span className="text-sm text-gray-500">
+          Page {currentPage} of {totalPages}
+        </span>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+            disabled={currentPage === 1}
+            className="px-3 py-1 border rounded-md disabled:opacity-50"
+          >
+            Previous
+          </button>
+          <button
+            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+            disabled={currentPage === totalPages}
+            className="px-3 py-1 border rounded-md disabled:opacity-50"
+          >
+            Next
+          </button>
+        </div>
       </div>
     </div>
   );

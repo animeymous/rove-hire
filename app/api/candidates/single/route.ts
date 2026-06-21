@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import Candidate from '@/lib/models/Candidate';
-import Job from '@/lib/models/Job'; // 👈 ADD THIS IMPORT
+import Job from '@/lib/models/Job';
 import TimelineEvent from '@/lib/models/TimelineEvent';
 import OfferDocument from '@/lib/models/OfferDocument';
+import Interview from '@/lib/models/Interview';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
 
@@ -27,7 +28,6 @@ export async function GET(request: NextRequest) {
 
     await connectToDatabase();
 
-    // Now Job model is registered, so populate works
     const candidate = await Candidate.findById(id).populate('jobId', 'title');
     const timeline = await TimelineEvent.find({ candidateId: id }).sort({ createdAt: -1 });
     const offerDoc = await OfferDocument.findOne({ candidateId: id });
@@ -147,7 +147,73 @@ export async function PATCH(request: NextRequest) {
   } catch (error) {
     console.error('Error updating candidate:', error);
     return NextResponse.json(
-      { error: 'Failed to update candidate' },
+      { error: 'Failed to update candidate: ' + (error as Error).message },
+      { status: 500 }
+    );
+  }
+}
+
+// DELETE - Delete candidate and all associated data
+export async function DELETE(request: NextRequest) {
+  try {
+    const session = await getServerSession(authOptions);
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const searchParams = request.nextUrl.searchParams;
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json(
+        { error: 'Candidate ID is required' },
+        { status: 400 }
+      );
+    }
+
+    await connectToDatabase();
+
+    // Check if candidate exists
+    const candidate = await Candidate.findById(id);
+    if (!candidate) {
+      return NextResponse.json(
+        { error: 'Candidate not found' },
+        { status: 404 }
+      );
+    }
+
+    // Delete all associated data
+    console.log(`🗑️ Deleting candidate: ${candidate.name} (${id})`);
+
+    // 1. Delete timeline events
+    const timelineResult = await TimelineEvent.deleteMany({ candidateId: id });
+    console.log(`📋 Deleted ${timelineResult.deletedCount} timeline events`);
+
+    // 2. Delete interviews
+    const interviewResult = await Interview.deleteMany({ candidateId: id });
+    console.log(`📅 Deleted ${interviewResult.deletedCount} interviews`);
+
+    // 3. Delete offer documents
+    const offerResult = await OfferDocument.deleteMany({ candidateId: id });
+    console.log(`📄 Deleted ${offerResult.deletedCount} offer documents`);
+
+    // 4. Delete the candidate
+    await candidate.deleteOne();
+    console.log(`✅ Candidate deleted successfully`);
+
+    return NextResponse.json({
+      message: 'Candidate and all associated data deleted successfully',
+      deleted: {
+        candidate: candidate.name,
+        timeline: timelineResult.deletedCount,
+        interviews: interviewResult.deletedCount,
+        offers: offerResult.deletedCount,
+      }
+    }, { status: 200 });
+  } catch (error) {
+    console.error('Error deleting candidate:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete candidate: ' + (error as Error).message },
       { status: 500 }
     );
   }

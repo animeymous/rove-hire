@@ -49,6 +49,14 @@ export async function POST(request: Request) {
       );
     }
 
+    // 🔥 VALIDATION: Only allow offer generation if candidate is HIRED
+    if (candidate.status !== 'Hired') {
+      return NextResponse.json(
+        { error: `Cannot generate offer. Candidate status is "${candidate.status}". Offer can only be generated for hired candidates.` },
+        { status: 400 }
+      );
+    }
+
     // Check if offer already exists
     const existingOffer = await OfferDocument.findOne({ candidateId });
     if (existingOffer) {
@@ -187,9 +195,9 @@ export async function POST(request: Request) {
       color: rgb(0.4, 0.4, 0.4),
     });
 
-    // Save Offer Letter to Vercel Blob - FIXED: Convert to Buffer
+    // Save Offer Letter to Vercel Blob
     const offerLetterBytes = await offerLetterDoc.save();
-    const offerLetterBuffer = Buffer.from(offerLetterBytes); // 👈 Convert Uint8Array to Buffer
+    const offerLetterBuffer = Buffer.from(offerLetterBytes);
     const offerLetterFileName = `offer_${uuidv4()}.pdf`;
     const offerBlob = await put(`offers/${offerLetterFileName}`, offerLetterBuffer, {
       access: 'public',
@@ -330,9 +338,9 @@ export async function POST(request: Request) {
       font: ndaFont,
     });
 
-    // Save NDA to Vercel Blob - FIXED: Convert to Buffer
+    // Save NDA to Vercel Blob
     const ndaBytes = await ndaDoc.save();
-    const ndaBuffer = Buffer.from(ndaBytes); // 👈 Convert Uint8Array to Buffer
+    const ndaBuffer = Buffer.from(ndaBytes);
     const ndaFileName = `nda_${uuidv4()}.pdf`;
     const ndaBlob = await put(`offers/${ndaFileName}`, ndaBuffer, {
       access: 'public',

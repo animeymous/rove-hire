@@ -20,6 +20,8 @@ interface Candidate {
     _id: string;
     title: string;
   };
+  magicLinkToken?: string;
+  isMagicLinkUsed?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -48,38 +50,23 @@ export default function CandidateProfilePage() {
     }
   }, [id]);
 
-  // const fetchCandidate = async () => {
-  //   try {
-  //     const response = await fetch(`/api/candidates/${id}`);
-  //     const data = await response.json();
-  //     if (response.ok) {
-  //       setCandidate(data.candidate);
-  //       setTimeline(data.timeline || []);
-  //     }
-  //   } catch (error) {
-  //     console.error('Error fetching candidate:', error);
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
-const fetchCandidate = async () => {
-  try {
-    // Use the single endpoint with query parameter
-    const response = await fetch(`/api/candidates/single?id=${id}`);
-    const data = await response.json();
-    
-    if (response.ok) {
-      setCandidate(data.candidate);
-      setTimeline(data.timeline || []);
-    } else {
-      console.error('Error:', data.error);
+  const fetchCandidate = async () => {
+    try {
+      const response = await fetch(`/api/candidates/single?id=${id}`);
+      const data = await response.json();
+      
+      if (response.ok) {
+        setCandidate(data.candidate);
+        setTimeline(data.timeline || []);
+      } else {
+        console.error('Error:', data.error);
+      }
+    } catch (error) {
+      console.error('Error fetching candidate:', error);
+    } finally {
+      setLoading(false);
     }
-  } catch (error) {
-    console.error('Error fetching candidate:', error);
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
@@ -102,6 +89,7 @@ const fetchCandidate = async () => {
       'OFFER_SENT': '📄',
       'HIRED': '🎉',
       'REJECTED': '❌',
+      'NOTE_ADDED': '📌',
     };
     return icons[type] || '📌';
   };
@@ -120,9 +108,7 @@ const fetchCandidate = async () => {
       const data = await response.json();
 
       if (response.ok) {
-        // Refresh the page to show updated data
         fetchCandidate();
-        // Show success message
         alert(`✅ Candidate ${newStatus.toLowerCase()} successfully!`);
       } else {
         alert(`❌ Error: ${data.error || 'Failed to update status'}`);
@@ -258,25 +244,57 @@ const fetchCandidate = async () => {
             </div>
           </div>
 
-          {/* Resume & Other Info */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h3 className="text-sm font-medium text-gray-500 mb-4">Documents</h3>
-            {candidate.resumeUrl ? (
-              <a
-                href={candidate.resumeUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800"
-              >
-                📄 Download Resume
-              </a>
-            ) : (
-              <p className="text-sm text-gray-400">No resume uploaded</p>
-            )}
-            
-            <div className="mt-6 pt-6 border-t border-gray-200">
-              <h3 className="text-sm font-medium text-gray-500 mb-2">Applied On</h3>
-              <p className="text-sm">{new Date(candidate.createdAt).toLocaleDateString()} at {new Date(candidate.createdAt).toLocaleTimeString()}</p>
+          {/* Magic Link & Documents */}
+          <div className="space-y-6">
+            {/* Magic Link */}
+            <div className="bg-white rounded-lg shadow p-6">
+              <h3 className="text-sm font-medium text-gray-500 mb-4">🔗 Application Link</h3>
+              {!candidate?.isMagicLinkUsed && candidate?.magicLinkToken ? (
+                <div className="flex items-center gap-3">
+                  <input
+                    type="text"
+                    readOnly
+                    value={`${window.location.origin}/apply/${candidate.magicLinkToken}`}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-50"
+                  />
+                  <button
+                    onClick={() => {
+                      const link = `${window.location.origin}/apply/${candidate.magicLinkToken}`;
+                      navigator.clipboard.writeText(link);
+                      alert('✅ Magic link copied to clipboard!');
+                    }}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                  >
+                    Copy Link
+                  </button>
+                </div>
+              ) : candidate.isMagicLinkUsed ? (
+                <p className="text-sm text-green-600">✅ Candidate has already submitted the application</p>
+              ) : (
+                <p className="text-sm text-gray-400">No magic link available</p>
+              )}
+            </div>
+
+            {/* Resume */}
+            <div className="bg-white rounded-lg shadow p-6">
+              <h3 className="text-sm font-medium text-gray-500 mb-4">Documents</h3>
+              {candidate.resumeUrl ? (
+                <a
+                  href={candidate.resumeUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800"
+                >
+                  📄 Download Resume
+                </a>
+              ) : (
+                <p className="text-sm text-gray-400">No resume uploaded</p>
+              )}
+              
+              <div className="mt-6 pt-6 border-t border-gray-200">
+                <h3 className="text-sm font-medium text-gray-500 mb-2">Applied On</h3>
+                <p className="text-sm">{new Date(candidate.createdAt).toLocaleDateString()} at {new Date(candidate.createdAt).toLocaleTimeString()}</p>
+              </div>
             </div>
           </div>
         </div>
@@ -317,16 +335,6 @@ const fetchCandidate = async () => {
               </button>
             )}
 
-            {/* Generate Offer - Show for Interview Scheduled */}
-            {candidate.status === 'Interview Scheduled' && (
-              <button
-                onClick={() => router.push(`/candidates/${id}/generate-offer`)}
-                className="w-full md:w-auto px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition text-left"
-              >
-                📄 Generate Offer
-              </button>
-            )}
-
             {/* Mark as Hired - Show after Offer Sent */}
             {candidate.status === 'Offer Sent' && (
               <button
@@ -337,16 +345,26 @@ const fetchCandidate = async () => {
               </button>
             )}
 
+            {/* Generate Offer - ONLY Show for Hired candidates */}
+            {candidate.status === 'Hired' && (
+              <button
+                onClick={() => router.push(`/candidates/${id}/generate-offer`)}
+                className="w-full md:w-auto px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition text-left"
+              >
+                📄 Generate Offer Documents
+              </button>
+            )}
+
             {/* Offer Documents - Show if status is Offer Sent or Hired */}
             {(candidate.status === 'Offer Sent' || candidate.status === 'Hired') && (
-              <div className="bg-white rounded-lg shadow p-6 mt-6">
-                <h3 className="text-sm font-medium text-gray-500 mb-4">📄 Offer Documents</h3>
-                <div className="space-y-3">
+              <div className="bg-gray-50 rounded-lg p-4 mt-2">
+                <h4 className="text-sm font-medium text-gray-700 mb-2">📄 Offer Documents</h4>
+                <div className="space-y-2">
                   <a
                     href={`/api/offers/download?candidateId=${candidate._id}&type=offer`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800"
+                    className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm"
                   >
                     📄 Download Offer Letter
                   </a>
@@ -355,7 +373,7 @@ const fetchCandidate = async () => {
                     href={`/api/offers/download?candidateId=${candidate._id}&type=nda`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800"
+                    className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm"
                   >
                     📄 Download NDA
                   </a>
@@ -368,8 +386,8 @@ const fetchCandidate = async () => {
               <button
                 onClick={() => {
                   const reason = prompt('Please provide a reason for rejection:');
-                  if (reason) {
-                    handleStatusChange('Rejected', reason);
+                  if (reason !== null) {
+                    handleStatusChange('Rejected', reason || 'No reason provided');
                   }
                 }}
                 className="w-full md:w-auto px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition text-left"
@@ -378,6 +396,7 @@ const fetchCandidate = async () => {
               </button>
             )}
 
+            {/* Status Messages */}
             {candidate.status === 'Hired' && (
               <div className="p-4 bg-green-50 border border-green-200 rounded-md">
                 <p className="text-green-800">✅ This candidate has been hired!</p>
@@ -388,6 +407,32 @@ const fetchCandidate = async () => {
               <div className="p-4 bg-red-50 border border-red-200 rounded-md">
                 <p className="text-red-800">❌ This candidate has been rejected.</p>
               </div>
+            )}
+
+            {/* Delete - Show for non-hired candidates */}
+            {candidate.status !== 'Hired' && (
+              <button
+                onClick={async () => {
+                  if (confirm(`⚠️ Are you sure you want to delete ${candidate.name}? This cannot be undone.`)) {
+                    try {
+                      const response = await fetch(`/api/candidates/single?id=${id}`, {
+                        method: 'DELETE',
+                      });
+                      if (response.ok) {
+                        router.push('/candidates');
+                      } else {
+                        const data = await response.json();
+                        alert('❌ Failed to delete: ' + data.error);
+                      }
+                    } catch (error) {
+                      alert('❌ Failed to delete candidate');
+                    }
+                  }
+                }}
+                className="w-full md:w-auto px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition text-left"
+              >
+                🗑️ Delete Candidate
+              </button>
             )}
           </div>
         </div>

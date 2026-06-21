@@ -7,9 +7,11 @@ export interface IInterview extends Document {
   type: 'Screening' | 'Technical';
   interviewerName: string;
   notes?: string;
+  round?: string;
   status: 'Scheduled' | 'Completed' | 'Cancelled';
   feedback?: string;
   recommendation?: 'Hire' | 'No Hire' | 'Maybe';
+  isCompleted?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -54,6 +56,15 @@ const InterviewSchema = new Schema<IInterview>({
   recommendation: {
     type: String,
     enum: ['Hire', 'No Hire', 'Maybe'],
+  },
+  round: {
+    type: String,
+    enum: ['Screening', 'Technical', 'Final'],
+    default: 'Screening',
+  },
+  isCompleted: {
+    type: Boolean,
+    default: false,
   },
   createdAt: {
     type: Date,
